@@ -1,6 +1,6 @@
 // Cache dei file dell'app: dopo la prima apertura si apre anche senza internet.
 // Quando modifichi i file cambia la versione qui sotto, così il telefono scarica l'aggiornamento.
-const CACHE = 'catalogo-v1';
+const CACHE = 'catalogo-v2';
 const FILES = ['./', 'index.html', 'firebase-config.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png'];
 const RUNTIME = 'catalogo-lib-v1';
 

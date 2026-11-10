@@ -170,6 +170,35 @@ main .wrap{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 .backup-hint{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:.85rem;padding:10px 12px;border-radius:10px;background:var(--accent-soft);color:var(--accent-fg);margin-bottom:10px}
 .backup-hint button{font:inherit;font-weight:700;padding:6px 12px;border-radius:8px;border:0;background:var(--accent);color:var(--on-accent);cursor:pointer}
 .offline{font-size:.75rem;color:var(--band-muted)}
+/* --- offerte per prodotto --- */
+.offers{display:flex;flex-direction:column;gap:8px;margin-top:18px}
+.offers-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.offers-head .lbl{font-size:.7rem}
+.offers-head small{color:var(--muted);font-size:.78rem}
+.offer{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;width:100%;text-align:left;font:inherit;color:inherit;background:var(--bg);border:1px solid transparent;border-radius:12px;padding:10px 12px;cursor:pointer}
+.offer:focus-visible{outline:2px solid var(--accent)}
+.offer.cur{cursor:default}
+.offer.best{border-color:var(--good);background:var(--good-soft)}
+.offer b{min-width:0;overflow-wrap:anywhere}
+.offer .v{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.offer small{color:var(--muted);font-size:.78rem;min-width:0}
+.offer .d{font-size:.78rem;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.offer .d.up{color:var(--bad)}
+.offer .d.down{color:var(--good)}
+.tag.warn{background:var(--bad-soft);color:var(--bad)}
+.tag.deal{background:var(--good-soft);color:var(--good)}
+/* --- da sistemare --- */
+.chip.fix{border-color:var(--accent);color:var(--accent)}
+.chip.fix[aria-pressed="true"]{color:var(--on-accent)}
+.fixbox{display:flex;flex-direction:column;gap:8px;background:var(--bad-soft);color:var(--fg);border-radius:12px;padding:12px 14px;margin-bottom:16px}
+.fixbox .lbl{color:var(--bad)}
+.fixbox ul{display:flex;flex-direction:column;gap:4px;padding-left:18px;list-style:disc;font-size:.88rem}
+.fixbox .btn{flex:none}
+.merge{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--surface)}
+.merge strong{font-family:var(--f-display)}
+.merge p{margin:0;font-size:.85rem;color:var(--muted)}
+.merge .row2{display:flex;flex-wrap:wrap;gap:8px}
+.merge .btn{flex:1 1 140px;font-size:.85rem;padding:10px}
 </style>
 </head>
 <body>
@@ -218,7 +247,7 @@ main .wrap{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
     <div class="actions">
       <button class="btn" id="close" type="button">Chiudi</button>
       <button class="btn" id="edit" type="button" hidden>Modifica</button>
-      <button class="btn primary" id="compare" type="button">Confronta</button>
+      <button class="btn primary" id="compare" type="button">Aggiungi offerta</button>
     </div>
   </div>
 </div>
@@ -285,7 +314,11 @@ main .wrap{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
     <div class="verdict wait" id="x-res" aria-live="polite"></div>
     <div class="actions">
       <button class="btn" type="button" id="x-close">Chiudi</button>
-      <button class="btn primary" type="button" id="x-save" hidden>Salva come nuovo prodotto</button>
+      <button class="btn primary" type="button" id="x-save" hidden>Salva offerta</button>
+    </div>
+    <div class="menu-list" style="margin-top:8px">
+      <button class="btn" type="button" id="x-main" hidden>Rendi questo il fornitore attuale</button>
+      <button class="btn danger" type="button" id="x-del" hidden>Elimina offerta</button>
     </div>
   </div>
 </div>
@@ -442,8 +475,10 @@ function notice(msg){ $('notice').hidden=!msg; $('notice').textContent=msg||''; 
 function buildFilters(){
   const cats = {}; P.forEach(p => cats[p.k]=(cats[p.k]||0)+1);
   const catNames = ['Tutti', ...Object.keys(cats).sort((a,b)=>cats[b]-cats[a])];
-  if(!catNames.includes(state.cat)) state.cat='Tutti';
-  $('cats').innerHTML = catNames.map(c => `<button class="chip" type="button" data-cat="${esc(c)}">${esc(c)}<span>${c==='Tutti'?P.length:cats[c]}</span></button>`).join('');
+  const nFix = P.filter(p => p._pb.length).length;
+  if(!catNames.includes(state.cat) && !(state.cat===FIX && nFix)) state.cat='Tutti';
+  $('cats').innerHTML = catNames.map(c => `<button class="chip" type="button" data-cat="${esc(c)}">${esc(c)}<span>${c==='Tutti'?P.length:cats[c]}</span></button>`).join('')
+    + (nFix ? `<button class="chip fix" type="button" data-cat="${FIX}">Da sistemare<span>${nFix}</span></button>` : '');
   const sups = [...new Set(P.map(p=>p.f).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'it'));
   $('sup').innerHTML = '<option value="">Tutti i fornitori</option>' + sups.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
   if(state.sup && !sups.includes(state.sup)) state.sup='';
@@ -476,7 +511,8 @@ function render(){
   $('clear').hidden = !state.q;
   document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.cat===state.cat));
   const terms = norm(state.q).split(/\s+/).filter(Boolean);
-  shown = P.filter(p => (state.cat==='Tutti'||p.k===state.cat) && (!state.sup||p.f===state.sup) && terms.every(tm => p._s.includes(tm)));
+  shown = P.filter(p => (state.cat==='Tutti'||p.k===state.cat||(state.cat===FIX&&p._pb.length)) && (!state.sup||p.f===state.sup) && terms.every(tm => p._s.includes(tm)));
+  renderMerges();
   const price = p => p.net ?? p.cu ?? null;
   const s = state.sort;
   const byPrice = dir => (a,b) => { const x=price(a), y=price(b); if(x==null&&y==null) return 0; if(x==null) return 1; if(y==null) return -1; return dir*(x-y); };
@@ -495,7 +531,7 @@ function render(){
     return `<li><button class="row" type="button" data-i="${i}">
       <span class="name">${hl(p.n,terms)}</span>
       <span class="price">${pr}</span>
-      <span class="meta"><span class="code">${hl(p.c,terms)}</span>${p.f?`<span>${hl(p.f,terms)}</span>`:''}<span>${esc(p.k)}</span>${p.net!=null?'<span class="tag good">Scontato</span>':''}</span>
+      <span class="meta"><span class="code">${hl(p.c,terms)}</span>${p.f?`<span>${hl(p.f,terms)}</span>`:''}<span>${esc(p.k)}</span>${p.net!=null?'<span class="tag good">Scontato</span>':''}${p._deal?`<span class="tag deal">Offerta −${p._deal.toLocaleString('it-IT',{maximumFractionDigits:0})}%</span>`:''}${state.cat===FIX&&p._pb.length?`<span class="tag warn">${esc(p._pb[0].t)}</span>`:''}</span>
     </button></li>`;
   }).join('');
 }
@@ -521,15 +557,21 @@ function openDetail(p){
     ['Note', p.note], ['Ultima modifica', p.agg ? new Date(p.agg).toLocaleDateString('it-IT') : null],
   ].filter(r=>r[1]!=null && r[1]!=='');
   const um = p.um ? `<small> / ${esc(p.um)}</small>` : '';
+  const fixBox = p._pb.length ? `<div class="fixbox"><span class="lbl">Da sistemare</span><ul>${p._pb.map(x=>`<li>${esc(x.t)}</li>`).join('')}</ul>${canWrite?`<button class="btn" type="button" id="d-fix">${p._pb.some(x=>x.unit)?'Correggi unità e controlla':'Sistema ora'}</button>`:''}</div>` : '';
   $('detail').innerHTML = `
     <h2 id="d-name">${esc(p.n)}</h2>
     <div class="sub"><span class="code">${esc(p.c)}</span><span class="tag">${esc(p.k)}</span></div>
+    ${fixBox}
     <div class="hero">
       <div><div class="lbl">Costo unitario</div><div class="val">${eur(p.cu)}${p.cu!=null?um:''}</div></div>
       ${p.net!=null?`<div class="net"><div class="lbl">Netto scontato</div><div class="val">${eur(p.net)}${um}</div></div>`:''}
     </div>
-    <dl>${rows.map(r=>`<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>`;
+    <dl>${rows.map(r=>`<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>
+    ${offersHtml(p)}`;
   $('edit').hidden = !canWrite;
+  $('compare').hidden = !canWrite;
+  const fx = $('d-fix'); if(fx) fx.onclick = () => { $('sheet').hidden=true; openFix(p); };
+  $('detail').querySelectorAll('.offer[data-o]').forEach(b => b.onclick = () => { $('sheet').hidden=true; openCompare(p, b.dataset.o); });
   openSheet('sheet', $('close'));
 }
 $('edit').onclick = () => { $('sheet').hidden=true; openForm(current); };
@@ -588,6 +630,7 @@ $('form').addEventListener('submit', async e => {
   if(!col){ F('err').hidden=false; F('err').textContent='Il catalogo non è raggiungibile in questo momento. Riprova tra poco.'; return; }
   const code = editing ? editing.c : nextCode();
   o.c = code; o.agg = new Date().toISOString();
+  if(editing && editing.offerte && editing.offerte.length) o.offerte = editing.offerte;
   F('save').disabled=true; F('save').textContent='Salvataggio…';
   try{
     await col.doc(code).set(o);
@@ -619,8 +662,11 @@ function prezzi(p, iva, q, s1, s2){
   return o;
 }
 $('compare').onclick = () => { $('sheet').hidden=true; openCompare(current); };
-function openCompare(p){
+let editOffer = null, xDelArmed = false;
+function openCompare(p, offerId){
   current = p;
+  editOffer = offerId ? (p.offerte||[]).find(o => o.id===offerId) || null : null;
+  xDelArmed = false;
   const base = p.net ?? p.cu;
   X('base').innerHTML = `<span class="lbl">Prodotto attuale</span><b>${esc(p.n)}</b><span class="v">${eur(base)}${p.um?' / '+esc(p.um):''}</span>
     <small>${esc([p.f, p.u && p.q!=null ? `${p.u} da ${p.q.toLocaleString('it-IT')} ${p.um||''}` : p.u].filter(Boolean).join(' · '))}${p.net!=null?' · prezzo netto scontato':''}</small>`;
@@ -628,7 +674,16 @@ function openCompare(p){
   X('u').value = p.u||''; X('q').value = fmtIn(p.q); X('um').value = p.um||''; X('iva').value = String(p.iva ?? 22);
   if(X('iva').value==='') X('iva').value='22';
   X('uso-l').textContent = `Quanti ${p.um||'pezzi'} usi al mese (facoltativo)`;
-  X('save').hidden = !canWrite;
+  const o = editOffer;
+  if(o){
+    X('f').value = o.f||''; X('u').value = o.u||''; X('q').value = fmtIn(o.q); X('um').value = o.um||'';
+    X('iva').value = String(o.iva ?? 22); X('p').value = fmtIn(o.p);
+    X('s1').value = o.s1!=null ? fmtIn(o.s1*100) : ''; X('s2').value = o.s2!=null ? fmtIn(o.s2*100) : '';
+  }
+  $('x-title').textContent = o ? 'Offerta ' + (o.f || 'senza fornitore') : 'Nuova offerta';
+  X('save').hidden = !canWrite; X('save').disabled = false; X('save').textContent = o ? 'Salva modifiche' : 'Salva offerta';
+  X('main').hidden = !(canWrite && o); X('del').hidden = !(canWrite && o);
+  X('del').textContent = 'Elimina offerta'; X('del').classList.remove('confirm');
   compare();
   openSheet('cmpSheet', X('f'));
 }
@@ -671,17 +726,158 @@ function compare(){
 $('xform').addEventListener('input', compare);
 $('xform').addEventListener('submit', e => e.preventDefault());
 X('close').onclick = closeSheets;
-X('save').onclick = () => {
+/* ---------- offerte salvate sul prodotto ---------- */
+const PRICE_KEYS = ['f','u','q','um','p','iva','t','cu','s1','ps','s2','pf'];
+const netOf = o => o.pf ?? o.ps ?? o.cu ?? null;
+// a: valori del modulo (sconti in %), ritorna i campi prezzo come nel catalogo (sconti in frazione)
+function priced(a){
+  const o = {};
+  ['f','u','um'].forEach(k => { if(a[k]) o[k] = a[k]; });
+  if(a.q!=null && !Number.isNaN(a.q)) o.q = a.q;
+  if(a.iva!=null && !Number.isNaN(a.iva)) o.iva = a.iva;
+  if(a.p!=null && !Number.isNaN(a.p)){
+    const r = prezzi(a.p, a.iva, a.q, a.s1, a.s2);
+    o.p = a.p; o.t = r.t; o.cu = r.cu;
+    if(r.ps!=null){ o.s1 = r6(a.s1/100); o.ps = r.ps; }
+    if(r.pf!=null){ o.s2 = r6(a.s2/100); o.pf = r.pf; }
+  }
+  return o;
+}
+function cleanDoc(p){ const o = {}; Object.keys(p).forEach(k => { if(k[0]!=='_' && k!=='net' && p[k]!==undefined) o[k] = p[k]; }); return o; }
+async function saveProduct(p, msg){
+  try{ await col.doc(p.c).set(cleanDoc(p)); toast(msg); return true; }
+  catch(err){ toast(err && err.code==='invalid_argument' ? 'Non hai i permessi per modificare il catalogo.' : 'Salvataggio non riuscito. Controlla la connessione e riprova.'); return false; }
+}
+function offersHtml(p){
+  const list = (p.offerte||[]).map(o => ({o, v: netOf(o)}));
+  const A = p.net ?? p.cu;
+  const vals = [A, ...list.map(x => x.v)].filter(v => v!=null);
+  const bestV = list.length && vals.length > 1 ? Math.min(...vals) : null;
+  const rows = [{cur:true, o:p, v:A}, ...list.sort((a,b) => (a.v??Infinity)-(b.v??Infinity))].map(x => {
+    x.best = bestV!=null && x.v!=null && Math.abs(x.v-bestV) < 0.0005;
+    const o = x.o, um = o.um || p.um || '';
+    const pack = [o.u, o.q!=null ? `da ${o.q.toLocaleString('it-IT')} ${o.um||''}` : ''].filter(Boolean).join(' ');
+    let d = '';
+    if(!x.cur && x.v!=null && A!=null && A>0){ const pc = (x.v-A)/A*100; d = Math.abs(pc)<0.05 ? '<span class="d">uguale</span>' : `<span class="d ${pc>0?'up':'down'}">${pc>0?'+':'−'}${Math.abs(pc).toLocaleString('it-IT',{maximumFractionDigits:1})}%</span>`; }
+    if(x.cur) d = '<span class="d">attuale</span>';
+    return `<button type="button" class="offer${x.cur?' cur':''}${x.best ? ' best':''}" ${x.cur?'tabindex="-1"':`data-o="${esc(o.id)}"`}>
+      <b>${esc(o.f || 'Senza fornitore')}${x.best ? ' · <span style="color:var(--good)">più conveniente</span>' : ''}</b><span class="v">${x.v!=null ? eur(x.v) + (um?` <small>/ ${esc(um)}</small>`:'') : '—'}</span>
+      <small>${esc(pack)}${o.agg && !x.cur ? ' · ' + new Date(o.agg).toLocaleDateString('it-IT') : ''}</small>${d}
+    </button>`;
+  }).join('');
+  return `<div class="offers"><div class="offers-head"><span class="lbl">Offerte dei fornitori</span><small>${list.length ? `${list.length} ${list.length===1?'offerta':'offerte'} salvate` : 'Nessuna offerta salvata'}</small></div>${rows}</div>`;
+}
+X('save').onclick = async () => {
   const a = readAlt(), p = current;
-  $('cmpSheet').hidden = true;
-  openForm(null);
-  F('n').value = p.n; F('k').value = p.k || ''; F('f').value = a.f; F('u').value = a.u; F('um').value = a.um;
-  F('q').value = X('q').value; F('p').value = X('p').value; F('iva').value = X('iva').value; F('s1').value = X('s1').value; F('s2').value = X('s2').value;
-  calc();
+  const bad = ['q','p','s1','s2'].some(k => Number.isNaN(a[k]) || (a[k]!=null && a[k]<0)) || a.s1>=100 || a.s2>=100;
+  if(bad || a.p==null){ toast(a.p==null ? 'Inserisci il prezzo dell\'offerta.' : 'Controlla i numeri dell\'offerta.'); return; }
+  const o = { id: editOffer ? editOffer.id : 'o' + Date.now().toString(36), ...priced(a), agg: new Date().toISOString() };
+  const offerte = (p.offerte||[]).filter(x => !editOffer || x.id!==editOffer.id).concat(o);
+  X('save').disabled = true;
+  const ok = await saveProduct({...p, offerte}, editOffer ? 'Offerta aggiornata' : `Offerta ${o.f||''} salvata`.replace('  ',' '));
+  X('save').disabled = false;
+  if(ok) closeSheets();
+};
+X('del').onclick = async () => {
+  if(!editOffer) return;
+  if(!xDelArmed){ xDelArmed = true; X('del').textContent = 'Tocca di nuovo per eliminare l\'offerta'; X('del').classList.add('confirm'); return; }
+  const p = current;
+  if(await saveProduct({...p, offerte: (p.offerte||[]).filter(x => x.id!==editOffer.id)}, 'Offerta eliminata')) closeSheets();
+};
+X('main').onclick = async () => {
+  if(!editOffer) return;
+  const p = current, a = readAlt();
+  if(a.p==null || Number.isNaN(a.p)){ toast('Inserisci il prezzo dell\'offerta.'); return; }
+  // il fornitore attuale diventa un'offerta, l'offerta scelta diventa il prezzo del prodotto
+  const old = {}; PRICE_KEYS.forEach(k => { if(p[k]!=null) old[k] = p[k]; });
+  const offerte = (p.offerte||[]).filter(x => x.id!==editOffer.id);
+  if(old.p!=null) offerte.push({ id: 'o' + Date.now().toString(36), ...old, agg: p.agg || new Date().toISOString() });
+  const np = {...p}; PRICE_KEYS.forEach(k => delete np[k]);
+  Object.assign(np, priced(a), { offerte, agg: new Date().toISOString() });
+  if(await saveProduct(np, `Ora il fornitore attuale è ${a.f || 'quello dell\'offerta'}`)) closeSheets();
 };
 
+/* ---------- da sistemare ---------- */
+var FIX = '__fix';
+const supKey = s => norm(s).replace(/[^a-z0-9]/g,'');
+function lev(a,b){ const d = Array.from({length:a.length+1}, (_,i) => [i]); for(let j=1;j<=b.length;j++) d[0][j]=j;
+  for(let i=1;i<=a.length;i++) for(let j=1;j<=b.length;j++) d[i][j] = Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1]+(a[i-1]===b[j-1]?0:1)); return d[a.length][b.length]; }
+// "1,7 kg" / "200 gr" / "75 cl" scritti come unità: suggerisce quantità totale + unità base
+function unitFix(p){
+  const m = (p.um||'').trim().match(/^(\d+(?:[.,]\d+)?)\s*(kg|g|gr|grammi|l|lt|litri|ml|cl)\.?$/i);
+  if(!m) return null;
+  const n = parseFloat(m[1].replace(',','.')), u = m[2].toLowerCase();
+  const base = ['kg','g','gr','grammi'].includes(u) ? 'kg' : 'l';
+  const f = {kg:1,g:.001,gr:.001,grammi:.001,l:1,lt:1,litri:1,ml:.001,cl:.01}[u];
+  return { q: r6((p.q>0?p.q:1) * n * f), um: base };
+}
+let similarSups = [];
+function findProblems(){
+  const sups = {}; P.forEach(p => { if(p.f) sups[p.f] = (sups[p.f]||0) + 1; });
+  const names = Object.keys(sups);
+  similarSups = [];
+  for(let i=0;i<names.length;i++) for(let j=i+1;j<names.length;j++){
+    const a = supKey(names[i]), b = supKey(names[j]);
+    if(a && b && (a===b || (Math.min(a.length,b.length)>=5 && lev(a,b)<=2))) similarSups.push([names[i], names[j], sups[names[i]], sups[names[j]]]);
+  }
+  const simOf = {}; similarSups.forEach(([a,b]) => { simOf[a]=b; simOf[b]=a; });
+  const byName = {}; P.forEach(p => { const k = norm(p.n).replace(/\s+/g,' ').trim(); (byName[k] = byName[k]||[]).push(p); });
+  P.forEach(p => {
+    const pb = [];
+    if(p.p==null) pb.push({t:'Manca il prezzo'});
+    if(!p.f) pb.push({t:'Manca il fornitore'});
+    else if(simOf[p.f]) pb.push({t:`Fornitore simile a “${simOf[p.f]}”: forse è lo stesso`});
+    if(!p.k || p.k==='Senza categoria') pb.push({t:'Manca la categoria'});
+    const uf = unitFix(p);
+    if(uf) pb.push({t:`Unità scritta come misura (“${p.um}”): meglio quantità ${uf.q.toLocaleString('it-IT')} e unità ${uf.um}`, unit:uf});
+    else if(!p.um) pb.push({t:'Manca l\'unità singola (pezzo, kg, bottiglia…)'});
+    const twins = byName[norm(p.n).replace(/\s+/g,' ').trim()].filter(x => x!==p);
+    if(twins.length) pb.push({t:`Possibile doppione di ${twins.map(x=>x.c).join(', ')}`});
+    p._pb = pb;
+  });
+}
+function openFix(p){
+  openForm(p);
+  const uf = p._pb.find(x => x.unit);
+  if(uf){ F('q').value = fmtIn(uf.unit.q); F('um').value = uf.unit.um; calc(); }
+  F('err').hidden = false;
+  F('err').innerHTML = '<b>Da sistemare:</b><br>' + p._pb.map(x => esc(x.t)).join('<br>') + (uf ? '<br>Ho già messo quantità e unità corrette: controlla e salva.' : '');
+}
+function renderMerges(){
+  let box = $('merges');
+  const on = state.cat===FIX && canWrite && similarSups.length;
+  if(!on){ if(box) box.remove(); return; }
+  if(!box){ box = document.createElement('div'); box.id = 'merges'; $('list').before(box); }
+  box.innerHTML = similarSups.map(([a,b,na,nb], i) => `<div class="merge"><strong>Fornitori simili</strong>
+    <p>“${esc(a)}” (${na} prodotti) e “${esc(b)}” (${nb} prodotti) sembrano lo stesso fornitore. Scegli il nome giusto: tutti i prodotti useranno quello.</p>
+    <div class="row2"><button class="btn" type="button" data-m="${i}" data-to="1">Usa “${esc(b)}”</button><button class="btn" type="button" data-m="${i}" data-to="0">Usa “${esc(a)}”</button></div></div>`).join('');
+  box.querySelectorAll('button[data-m]').forEach(btn => btn.onclick = async () => {
+    const [a,b] = similarSups[+btn.dataset.m];
+    const to = btn.dataset.to==='1' ? b : a, from = to===a ? b : a;
+    if(btn.dataset.armed!=='1'){ btn.dataset.armed='1'; btn.textContent = `Conferma: “${from}” diventa “${to}”`; btn.classList.add('primary'); return; }
+    btn.disabled = true;
+    try{
+      const { S, db, ref } = fb; const b8 = S.writeBatch(db); let n = 0;
+      P.forEach(p => {
+        const hit = p.f===from || (p.offerte||[]).some(o => o.f===from);
+        if(!hit) return;
+        const np = cleanDoc(p); if(np.f===from) np.f = to;
+        if(np.offerte) np.offerte = np.offerte.map(o => o.f===from ? {...o, f:to} : o);
+        b8.set(S.doc(ref, p.c), np); n++;
+      });
+      const w = b8.commit(); if(navigator.onLine) await w;
+      toast(`${n} prodotti ora usano “${to}”`);
+    }catch(e){ btn.disabled = false; toast('Unione non riuscita. Riprova.'); }
+  });
+}
+
 function setData(docs){
-  P = docs.map(d => { const p = {...d}; p.net = p.pf ?? p.ps ?? null; p._s = norm([p.n,p.c,p.f,p.k].join(' ')); return p; });
+  P = docs.map(d => { const p = {...d}; p.net = p.pf ?? p.ps ?? null; p._s = norm([p.n,p.c,p.f,p.k,...(p.offerte||[]).map(o=>o.f)].join(' '));
+    const A = p.net ?? p.cu, bo = (p.offerte||[]).map(netOf).filter(v => v!=null);
+    const best = bo.length ? Math.min(...bo) : null;
+    p._deal = (A && best!=null && best < A - 0.0005) ? (A-best)/A*100 : 0;
+    return p; });
+  findProblems();
   buildFilters(); render();
 }
 
@@ -700,7 +896,8 @@ function gate(state, info){
 /* backup: CSV per Excel (punto e virgola, virgola decimale) */
 const BK_KEY = 'catalogo-ultimo-backup';
 function csvExport(){
-  const cols = [['c','Codice'],['k','Categoria'],['n','Descrizione'],['f','Fornitore'],['u','Unità acquisto'],['q','Qtà per unità'],['um','Unità singola'],['p','Prezzo imponibile €'],['iva','IVA %'],['t','Totale con IVA €'],['cu','Costo unitario €'],['s1','Sconto %'],['ps','Prezzo dopo sconto €'],['s2','Sconto ulteriore % dopo essere scontato'],['pf','Prezzo finale €'],['note','Note'],['agg','Ultima modifica']];
+  const cols = [['c','Codice'],['k','Categoria'],['n','Descrizione'],['f','Fornitore'],['u','Unità acquisto'],['q','Qtà per unità'],['um','Unità singola'],['p','Prezzo imponibile €'],['iva','IVA %'],['t','Totale con IVA €'],['cu','Costo unitario €'],['s1','Sconto %'],['ps','Prezzo dopo sconto €'],['s2','Sconto ulteriore % dopo essere scontato'],['pf','Prezzo finale €'],['note','Note'],['agg','Ultima modifica'],['_bf','Offerta migliore: fornitore'],['_bv','Offerta migliore: € per unità'],['_no','N. offerte salvate']];
+  P.forEach(p => { const b = (p.offerte||[]).filter(o => netOf(o)!=null).sort((x,y) => netOf(x)-netOf(y))[0]; p._bf = b ? (b.f||'') : null; p._bv = b ? netOf(b) : null; p._no = (p.offerte||[]).length || null; });
   const cell = (p,k) => { let v = p[k]; if(v==null) return ''; if(k==='s1'||k==='s2') v = r6(v*100); if(k==='agg') v = String(v).slice(0,10); if(typeof v==='number') return String(v).replace('.',','); return '"'+String(v).replace(/"/g,'""')+'"'; };
   const rows = [...P].sort((a,b)=>a.c.localeCompare(b.c)).map(p => cols.map(([k]) => cell(p,k)).join(';'));
   const csv = '﻿' + cols.map(c=>c[1]).join(';') + '\r\n' + rows.join('\r\n');
