@@ -1,6 +1,6 @@
 /**
  * Backup automatico del Catalogo Prodotti su Google Drive.
- * Il 1° di ogni mese crea un Foglio Google con due schede (Prodotti e Offerte)
+ * Il 1° di ogni mese aggiorna (sovrascrive) un unico Foglio Google con due schede (Prodotti e Offerte)
  * nella cartella BackUp_App. Gira sui server di Google: telefono e PC possono essere spenti.
  *
  * Da fare una volta: esegui "installaBackupMensile" e concedi i permessi,
@@ -23,7 +23,7 @@ function backupCatalogo() {
   prodotti.sort((a, b) => String(a.c).localeCompare(String(b.c)));
 
   const oggi = Utilities.formatDate(new Date(), 'Europe/Rome', 'yyyy-MM-dd');
-  const ss = SpreadsheetApp.create('Backup Catalogo Prodotti ' + oggi);
+  const ss = fileBackup_(oggi);
 
   const valore = (p, k) => {
     let v = p[k];
@@ -34,12 +34,14 @@ function backupCatalogo() {
   };
 
   const sh = ss.getSheets()[0].setName('Prodotti');
+  sh.clear();
   const righe = prodotti.map(p => COLONNE.map(([k]) => valore(p, k)));
   sh.getRange(1, 1, 1, COLONNE.length).setValues([COLONNE.map(c => c[1])]).setFontWeight('bold');
   sh.getRange(2, 1, righe.length, COLONNE.length).setValues(righe);
   sh.setFrozenRows(1);
 
-  const off = ss.insertSheet('Offerte');
+  const off = ss.getSheetByName('Offerte') || ss.insertSheet('Offerte');
+  off.clear();
   const intest = ['Codice prodotto', 'Descrizione'].concat(COLONNE.slice(3, 15).map(c => c[1]), ['Netto € per unità', 'Data offerta']);
   const righeOff = [];
   prodotti.forEach(p => (p.offerte || []).forEach(o => {
@@ -50,8 +52,32 @@ function backupCatalogo() {
   if (righeOff.length) off.getRange(2, 1, righeOff.length, intest.length).setValues(righeOff);
   off.setFrozenRows(1);
 
-  DriveApp.getFileById(ss.getId()).moveTo(DriveApp.getFolderById(FOLDER_ID));
-  console.log('Backup creato: ' + prodotti.length + ' prodotti, ' + righeOff.length + ' offerte. ' + ss.getUrl());
+  SpreadsheetApp.flush();
+  console.log('Backup aggiornato: ' + prodotti.length + ' prodotti, ' + righeOff.length + ' offerte. ' + ss.getUrl());
+}
+
+/**
+ * Un solo file di backup che viene sovrascritto ogni mese (il nome riporta la data dell'ultimo backup).
+ * Se nella cartella ci sono più backup, tiene il più recente e sposta gli altri nel cestino.
+ */
+function fileBackup_(oggi) {
+  const cartella = DriveApp.getFolderById(FOLDER_ID);
+  const trovati = [];
+  const it = cartella.getFilesByType(MimeType.GOOGLE_SHEETS);
+  while (it.hasNext()) {
+    const f = it.next();
+    if (f.getName().indexOf('Backup Catalogo Prodotti') === 0) trovati.push(f);
+  }
+  trovati.sort((a, b) => b.getLastUpdated() - a.getLastUpdated());
+  trovati.slice(1).forEach(f => f.setTrashed(true));
+  const nome = 'Backup Catalogo Prodotti (aggiornato ' + oggi + ')';
+  if (trovati.length) {
+    trovati[0].setName(nome);
+    return SpreadsheetApp.openById(trovati[0].getId());
+  }
+  const ss = SpreadsheetApp.create(nome);
+  DriveApp.getFileById(ss.getId()).moveTo(cartella);
+  return ss;
 }
 
 /** Legge tutta la collezione "catalogo" da Firestore con il tuo account Google. */
