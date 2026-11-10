@@ -1,0 +1,4 @@
+# Dati del catalogo e regole con le email: restano solo sul PC, mai su GitHub
+prodotti-iniziali.json
+firestore.rules
+*.csv
